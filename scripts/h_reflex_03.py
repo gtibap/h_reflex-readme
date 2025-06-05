@@ -9,12 +9,18 @@ from matplotlib.widgets import EllipseSelector, RectangleSelector
 from participants import participants_dict
 
 ## global variables
+fig=[]
 ax=[]
 selectors=[]
+emg_list=[]
+ch_time = 0
+ch_emg = 1
+ax_sel = 0
+x1,y1,x2,y2 = 0,0,0,0
 
 ###############
 def main(args):
-    global ax
+    global fig, ax, ch_emg
 
     ## participant number
     id = int(args[1])
@@ -30,10 +36,9 @@ def main(args):
     ch_emg   = id_p['ch_mea']
     ch_sync  = id_p['ch_sync']
     seg_stim = id_p['stim_hm']
-    ## id time channel is zero
-    ch_time = 0
+    ## id time channel is zero in the matlab (legacy) file format data
 
-    ## load h-reflex raw data
+    ## load h-reflex raw data [matlab (legacy) file format]
     mat = sio.loadmat(path+filename)
 
     ## number of channels +1 to include time channel
@@ -44,7 +49,7 @@ def main(args):
     channelsNames = np.empty((noChans, 0)).tolist()
     df = pd.DataFrame()
 
-    ## raw data and channels names
+    ## extract raw data and allocate each channel in each variable
     for i in np.arange(noChans):
         channels[i] = mat['Data'][0,i].flatten()
         channelsNames[i] = mat['channelNames'][0][i][0]
@@ -76,6 +81,7 @@ def main(args):
     # print(f"df_stm indexes:\n{df_stm.index}")
     # print(f"number of pulses:\n{len(df_stm.index)}")
 
+    ## number of stimulations
     n_pulses = len(df_stm.index)
 
     ## from the original dataframe we extract rows that correspond with the begining of each stimulation pulse
@@ -83,10 +89,9 @@ def main(args):
     df_sel = df.iloc[df_stm.index]
     # print(f"df_sel:\n{df_sel}")
 
+    ## creates a figure to plot the selected stimulation responses 
     n_rows = len(seg_stim)
     n_cols = 1
-
-    # fig = plt.figure(sharex=True)
     fig, ax = plt.subplots(n_rows, n_cols, sharex=True, figsize=(10*n_cols, 5*n_rows))
     ax = ax.flat
 
@@ -98,13 +103,18 @@ def main(args):
     for i, t0 in enumerate(df_sel.iloc[:,ch_time]):
         if i in seg_stim:
             df_seg = df[(df.iloc[:,ch_time]>=(t0-0.02)) & (df.iloc[:,ch_time]<=(t0+0.08))]
+            ## time, emg, and sync data from selected stimulations
+            df_seg.iloc[:,ch_time] = df_seg.iloc[:,ch_time].to_numpy() - t0
+            ## list of emg segments
+            emg_list.append(df_seg)
             ## time axis
-            t = np.linspace(-0.02, 0.08, len(df_seg))
+            t = df_seg.iloc[:,ch_time].to_numpy()
             ## plot emg segment at each subplot
             ax[idx].plot(t, df_seg.iloc[:,ch_emg])
             ax[idx].grid(color = 'green', linestyle = '--', linewidth = 0.2)
             ax[idx].set_title(f"stim: {i}")
 
+            ## interactive rectangle selector
             selectors.append(RectangleSelector(
             ax[idx], select_callback,
             useblit=True,
@@ -121,7 +131,8 @@ def main(args):
 
     fig.suptitle(f"{channelsNames[ch_emg]}")
 
-    fig.canvas.mpl_connect('axes_enter_event', on_enter_axes)
+    fig.canvas.mpl_connect('button_press_event', on_click)
+    fig.canvas.mpl_connect('key_press_event', on_press)
 
     plt.show()
 
@@ -133,17 +144,47 @@ def select_callback(eclick, erelease):
 
     *eclick* and *erelease* are the press and release events.
     """
+    global x1,y1,x2,y2
+
     x1, y1 = eclick.xdata, eclick.ydata
     x2, y2 = erelease.xdata, erelease.ydata
-    print(f"({x1:3.3f}, {y1:3.1f}) --> ({x2:3.3f}, {y2:3.1f})")
-    print(f"The buttons you used were: {eclick.button} {erelease.button}")
+    # print(f"({x1:3.3f}, {y1:3.1f}) --> ({x2:3.3f}, {y2:3.1f})")
+    # print(f"The buttons you used were: {eclick.button} {erelease.button}")
 
 
-def on_enter_axes(event):
+def on_click(event):
+    global ax_sel
     
     ax_index = np.argwhere(event.inaxes == ax)
-    print(f"ax_index: {ax_index[0][0]}")
-  
+    ax_sel = ax_index[0][0]
+    print(f"ax_index: {ax_sel}")
+
+def on_press(event):
+    print('press', event.key)
+    sys.stdout.flush()
+    if event.key == 'a':
+        ## amplitude peak to peak
+        print(f"peak to peak values: ")
+        df_emg = emg_list[ax_sel]
+        df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
+        # print(f"df_emg:\n{df_emg}")
+        id_max = df_emg.iloc[:,ch_emg].idxmax()
+        id_min = df_emg.iloc[:,ch_emg].idxmin()
+
+        df_max = df_emg[df_emg.index==id_max]
+        df_min = df_emg[df_emg.index==id_min]
+        print(f"max:\n{df_max}")
+        print(f"min:\n{df_min}")
+
+        vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
+        print(f"vpp: {vpp:3.2f} uV")
+
+        ax[ax_sel].plot(df_max.iloc[0,ch_time], df_max.iloc[0,ch_emg], marker = 'o')
+        ax[ax_sel].plot(df_min.iloc[0,ch_time], df_min.iloc[0,ch_emg], marker = 'o')
+
+        # visible = xl.get_visible()
+        # xl.set_visible(not visible)
+        fig.canvas.draw()
 
 
 ##########################
