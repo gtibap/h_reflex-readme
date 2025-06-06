@@ -1,3 +1,11 @@
+############################
+## Measuring tool for H-Reflex analysis
+## keyboard functions:
+## key a: amplitude peak to peak value
+## key b: amplitude peak from baseline (O V)
+## key t: latency (time)
+## key c: clean measurement values
+##############################
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,6 +21,7 @@ fig=[]
 ax=[]
 selectors=[]
 emg_list=[]
+seg_stim=[]
 ch_time = 0
 ch_emg = 1
 ax_sel = 0
@@ -20,7 +29,7 @@ x1,y1,x2,y2 = 0,0,0,0
 
 ###############
 def main(args):
-    global fig, ax, ch_emg
+    global fig, ax, ch_emg, seg_stim
 
     ## participant number
     id = int(args[1])
@@ -93,7 +102,12 @@ def main(args):
     n_rows = len(seg_stim)
     n_cols = 1
     fig, ax = plt.subplots(n_rows, n_cols, sharex=True, figsize=(10*n_cols, 5*n_rows))
-    ax = ax.flat
+
+    if len(seg_stim) > 1:
+        ax = ax.flat
+    else:
+        ax = [ax]
+        
 
     ## segment signal from (t0 - 0.02 s) to (t0 + 0.08 s) 
     ## iterate using time (column 0)
@@ -154,37 +168,152 @@ def select_callback(eclick, erelease):
 
 def on_click(event):
     global ax_sel
-    
-    ax_index = np.argwhere(event.inaxes == ax)
+    # print(f"onclick event.inaxes: {event.inaxes}")
+    if len(seg_stim) > 1:
+        # print(f"ax: {ax}")
+        ax_index = np.argwhere(event.inaxes == ax)
+    else:
+        # print(f"ax[0]: {ax[0]}")
+        ax_index = [[0]]
+    # print(f"onclick: {ax_index}")
     ax_sel = ax_index[0][0]
-    print(f"ax_index: {ax_sel}")
+    # print(f"ax_index: {ax_sel}")
 
 def on_press(event):
-    print('press', event.key)
+    # print('press', event.key)
     sys.stdout.flush()
+
+    ## measuring amplitude peak to peak
     if event.key == 'a':
-        ## amplitude peak to peak
-        print(f"peak to peak values: ")
+        
+        ax[ax_sel].cla()
+
         df_emg = emg_list[ax_sel]
+
+        ## plot emg segment at each subplot
+        t = df_emg.iloc[:,ch_time].to_numpy()
+        ax[ax_sel].plot(t, df_emg.iloc[:,ch_emg])
+        ax[ax_sel].grid(color = 'green', linestyle = '--', linewidth = 0.2)
+        ax[ax_sel].set_title(f"stim: {seg_stim[ax_sel]}")
+
+
         df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
-        # print(f"df_emg:\n{df_emg}")
+        
         id_max = df_emg.iloc[:,ch_emg].idxmax()
         id_min = df_emg.iloc[:,ch_emg].idxmin()
 
         df_max = df_emg[df_emg.index==id_max]
         df_min = df_emg[df_emg.index==id_min]
-        print(f"max:\n{df_max}")
-        print(f"min:\n{df_min}")
 
         vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
-        print(f"vpp: {vpp:3.2f} uV")
+        print(f"Vpp: {vpp:3.2f} uV")
 
-        ax[ax_sel].plot(df_max.iloc[0,ch_time], df_max.iloc[0,ch_emg], marker = 'o')
-        ax[ax_sel].plot(df_min.iloc[0,ch_time], df_min.iloc[0,ch_emg], marker = 'o')
+        ax[ax_sel].axhline(y=df_max.iloc[0,ch_emg], linestyle="--", color='tab:purple')
+        ax[ax_sel].axhline(y=df_min.iloc[0,ch_emg], linestyle="--", color='tab:purple')
 
-        # visible = xl.get_visible()
-        # xl.set_visible(not visible)
+        x_a = x2 + (x2-x1)/10
+        y_a = df_min.iloc[0,ch_emg] + (vpp)/10
+
+        bbox = dict(boxstyle="round", fc="0.8")
+        ax[ax_sel].annotate(f"Vpp={vpp:3.1f} uV", xy=(x_a, y_a), xytext=(x_a, y_a),fontsize=16, bbox=bbox,)
+
         fig.canvas.draw()
+
+    ## measuring latency (delta time)
+    elif event.key == 't':
+        
+        ax[ax_sel].cla()
+
+        df_emg = emg_list[ax_sel]
+        ## plot emg segment at each subplot
+        t = df_emg.iloc[:,ch_time].to_numpy()
+        ax[ax_sel].plot(t, df_emg.iloc[:,ch_emg])
+        ax[ax_sel].grid(color = 'green', linestyle = '--', linewidth = 0.2)
+        ax[ax_sel].set_title(f"stim: {seg_stim[ax_sel]}")
+
+        df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
+        
+        id_max = df_emg.iloc[:,ch_time].idxmax()
+        id_min = df_emg.iloc[:,ch_time].idxmin()
+
+        df_max = df_emg[df_emg.index==id_max]
+        df_min = df_emg[df_emg.index==id_min]
+
+        delta_t = df_max.iloc[0,ch_time] - df_min.iloc[0,ch_time]
+        print(f"latency: {delta_t:5.4} s")
+
+        ax[ax_sel].axvline(x=df_min.iloc[0,ch_time], linestyle="--", color='tab:orange')
+        ax[ax_sel].axvline(x=df_max.iloc[0,ch_time], linestyle="--", color='tab:orange')
+
+        # tmax = df_emg.iloc[:,ch_time].max()
+        # tmin = df_emg.iloc[:,ch_time].min()
+        # delta_t = tmax-tmin
+
+        x_a = x2 + (x2-x1)/5
+        y_a = y1 + (y2-y1)/10
+
+        bbox = dict(boxstyle="round", fc="0.8")
+        ax[ax_sel].annotate(f"t ={delta_t:4.3f} s", xy=(x_a, y_a), xytext=(x_a, y_a),fontsize=16, bbox=bbox,)
+
+        fig.canvas.draw()
+    
+    ## measuring max. amplitude stimulation voltage
+    elif event.key == 'b':
+
+        ## amplitude peak to peak
+        print(f"peak stimulation voltage: ")
+        ax[ax_sel].cla()
+
+        df_emg = emg_list[ax_sel]
+
+        ## plot emg segment at each subplot
+        t = df_emg.iloc[:,ch_time].to_numpy()
+        ax[ax_sel].plot(t, df_emg.iloc[:,ch_emg])
+        ax[ax_sel].grid(color = 'green', linestyle = '--', linewidth = 0.2)
+        ax[ax_sel].set_title(f"stim: {seg_stim[ax_sel]}")
+
+
+        df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
+        id_max = df_emg.iloc[:,ch_emg].idxmax()
+        id_min = df_emg.iloc[:,ch_emg].idxmin()
+
+        df_max = df_emg[df_emg.index==id_max]
+        df_min = df_emg[df_emg.index==id_min]
+
+        v_stim = np.max([np.abs(df_max.iloc[0,ch_emg]), np.abs(df_min.iloc[0,ch_emg])])
+        print(f"v_stim: {v_stim:3.2f} uV")
+
+        ax[ax_sel].axhline(y=0, linestyle="--", color='tab:purple')
+
+        if np.abs(df_max.iloc[0,ch_emg]) > np.abs(df_min.iloc[0,ch_emg]):
+            ax[ax_sel].axhline(y=df_max.iloc[0,ch_emg], linestyle="--", color='tab:purple')
+        else:
+            ax[ax_sel].axhline(y=df_min.iloc[0,ch_emg], linestyle="--", color='tab:purple')
+
+        x_a = x2 + (x2-x1)/10
+        y_a = df_min.iloc[0,ch_emg] + (v_stim)/10
+
+        bbox = dict(boxstyle="round", fc="0.8")
+        ax[ax_sel].annotate(f"V_stim={v_stim:3.1f} uV", xy=(x_a, y_a), xytext=(x_a, y_a),fontsize=16, bbox=bbox,)
+
+        fig.canvas.draw()
+
+
+    elif event.key == 'c':
+
+        ax[ax_sel].cla()
+        df_emg = emg_list[ax_sel]
+        ## plot emg segment at each subplot
+        t = df_emg.iloc[:,ch_time].to_numpy()
+        ax[ax_sel].plot(t, df_emg.iloc[:,ch_emg])
+        ax[ax_sel].grid(color = 'green', linestyle = '--', linewidth = 0.2)
+        ax[ax_sel].set_title(f"stim: {seg_stim[ax_sel]}")
+
+        fig.canvas.draw()
+
+    else:
+        pass
+
 
 
 ##########################

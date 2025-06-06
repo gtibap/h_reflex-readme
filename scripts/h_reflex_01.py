@@ -21,6 +21,7 @@ def main(args):
 
     ## load h-reflex raw data
     mat = sio.loadmat(path+filename)
+    print(f"mat:\n{mat}")
 
     ## get number of channels
     noChans = mat['noChans'][0,0]+1
