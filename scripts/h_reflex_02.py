@@ -6,9 +6,14 @@ from matplotlib.backend_bases import MouseButton
 
 from participants import participants_dict
 
+####################
+## global variables
+fig = []
+ax  = []
+
 ###############
 def main(args):
-    global binding_id
+    global fig, ax
 
     ## participant number
     id = int(args[1])
@@ -96,7 +101,28 @@ def main(args):
             ax[i].set_title(f"stim: {i}")
         fig.suptitle(f"{channelsNames[ch_emg]}")
 
-    plt.show(block=True)
+    fig.canvas.mpl_connect('button_press_event', on_click)
+    plt.show()
+
+    return 0
+
+###################
+def on_click(event):
+    global ax_index
+
+    ax_copy = np.copy(ax)
+
+    # print(f"onclick event.inaxes: {event.inaxes}")
+    if event.button is MouseButton.RIGHT:
+        print(f"button right")
+        print(f"event.inaxes: {event.inaxes}")
+        if event.inaxes in ax_copy:
+            ax_index = np.argwhere(event.inaxes == ax_copy)[0]
+            print(f"selected ax: {ax_index}")
+        else:
+            print(f"event.inaxes out of ax")
+    else:
+        print(f"other button")
 
     return 0
 

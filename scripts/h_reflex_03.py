@@ -98,6 +98,9 @@ def main(args):
     df_sel = df.iloc[df_stm.index]
     # print(f"df_sel:\n{df_sel}")
 
+
+
+
     ## creates a figure to plot the selected stimulation responses 
     n_rows = len(seg_stim)
     n_cols = 1
@@ -314,7 +317,7 @@ def on_press(event):
     else:
         pass
 
-
+    return 0
 
 ##########################
 if __name__ == '__main__':
