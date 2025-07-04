@@ -132,7 +132,7 @@ def open_file(name_title):
         df[channelsNames[i]] = channels[i]
 
     ## data visualization
-    fig, ax = plt.subplots((noChans-1)+1, 1, sharex=True,)
+    fig, ax = plt.subplots((noChans-1), 1, sharex=True,)
     if noChans > 2:
         ax = ax.flat
     else:
@@ -151,18 +151,13 @@ def open_file(name_title):
     ax[0].set_title(f"original emg signal")
     ax[0].grid(color = 'green', linestyle = '--', linewidth = 0.2)
 
-    ax[1].plot(channels[0], y)
-    ax[1].set_title(f"filtered emg signal")
+    ax[1].plot(channels[0], channels[-1])
+    ax[1].set_title(f"Sync stimulation")
     ax[1].grid(color = 'green', linestyle = '--', linewidth = 0.2)
-
-    ax[2].plot(channels[0], grad_y)
-    ax[2].set_title(f"gradient filtered emg signal")
-    ax[2].grid(color = 'green', linestyle = '--', linewidth = 0.2)
 
     fig.suptitle(name_title, fontsize=16)
 
     return 0
-    # plt.show()
 
 ####################################
 # def butter_lowpass_sos(cutoff, fs, order=3):
@@ -184,92 +179,46 @@ def filter_emg(data):
 def signal_segmentation(name_title):
     global df_sel, fig_seg, ax_seg, stim_list, obj_list
 
-    # print(f"df:\n{df.head()}")
-    # print(f"ch_sync: {ch_sync}")
     ## sync greater than zero -> stimulation (sync signal values: min=0, max=1)
     df_sync = df[df.iloc[:,ch_sync]>0.5]
-    # print(f"df_sync:\n{df_sync}")
 
     ## to identify the initial sample of each stimulation
     ## we apply the difference between adjacent values
     df_diff = df_sync.diff()
-    # print(f"df_diff:\n{df_diff}")
 
-    ## if the difference in time is greater than 0.02 s, means the beginning of an stimulation pulse
-    ## because time between stimulations is bigger than 0.02 s (usually 10 s between two consecutive stimulations)
+    ## if the difference in time is greater than 0.05 s, means the beginning of a new stimulation pulse
+    ## because time between stimulations is bigger than 0.05 s (usually 10 s between two consecutive stimulations)
     ## the second condition is to identify NaN values 
     ## (the first difference is NaN but corresponds to the begining of the first stimulation pulse)
-    df_stm = df_diff[ (df_diff.iloc[:,ch_time]>0.02) | (df_diff.iloc[:,ch_time]!=df_diff.iloc[:,ch_time]) ]
-    # print(f"df_stm:\n{df_stm}")
-
-    # print(f"df_stm indexes:\n{df_stm.index}")
-    # print(f"number of pulses:\n{len(df_stm.index)}")
+    df_stm = df_diff[ (df_diff.iloc[:,ch_time]>0.05) | (df_diff.iloc[:,ch_time]!=df_diff.iloc[:,ch_time]) ]
 
     n_pulses = len(df_stm.index)
 
     ## from the original dataframe we extract rows that correspond with the begining of each stimulation pulse
     ## (using the indexes from df_stm) 
     df_sel = df.iloc[df_stm.index]
-    # print(f"df_sel:\n{df_sel}")
 
     n_rows = int(np.ceil(np.sqrt(n_pulses)))
     n_cols = int(np.ceil(n_pulses/n_rows))
 
-    # for ch_emg in ch_emg_list:
+    ## channel number in the list, usually ch_emg = 1
     ch_emg = ch_emg_list[0]
-
-    # fig_vpp, ax_vpp = plt.subplots(2,1, sharex=True)
 
     fig, ax = plt.subplots(n_rows, n_cols, sharex=True, sharey=True, figsize=(3*n_cols, 2*n_rows))
     ax = ax.flat
 
-    # fig_filt, ax_filt = plt.subplots(n_rows, n_cols, sharex=True, sharey=True, figsize=(3*n_cols, 2*n_rows))
-    # ax_filt = ax_filt.flat
-
-    # fig_grad, ax_grad = plt.subplots(n_rows, n_cols, sharex=True, sharey=True, figsize=(3*n_cols, 2*n_rows))
-    # ax_grad = ax_grad.flat
-
-    # fig_fft, ax_fft = plt.subplots(n_rows, n_cols, sharex=True, sharey=True, figsize=(3*n_cols, 2*n_rows))
-    # ax_fft = ax_fft.flat
-
-    ## list of segments, stimulation segments
-    vpp_mwave_list = []
-    vpp_hreflex_list = []
-    
     ## segment signal from (t0 - 0.02 s) to (t0 + 0.08 s) 
     ## iterate using time (column 0)
     for i, t0 in enumerate(df_sel.iloc[:,ch_time]):
-        print(f"t0: {t0}")
+        # t0 is the time zero (t=0) of each stimulation
         df_seg = df[(df.iloc[:,ch_time]>=(t0-0.02)) & (df.iloc[:,ch_time]<=(t0+0.08))]
 
-        ## replace time values
+        ## replace time values to the same range (-0.02, 0.08)
         df_seg.iloc[:,ch_time] = df_seg.iloc[:,ch_time].to_numpy() - t0
-        # print(f"df seg:\m{df_seg}")
-        # stim_list.append(df_seg)
 
         ## create an object of class StimulationResponses for each emg stimulation responses
         obj_list.append(StimulationResponses(df_seg, i))
 
-       
-        ## calculate peak to peak voltage of M-wave
-        # lim_inf=0.008
-        # lim_sup=0.025
-        # vpp_mwave_list.append(get_vpp_with_grad(df_seg, lim_inf, lim_sup, ax_filt[i], ax_grad[i], ax_fft[i]))
-        # vpp_mwave_list.append(get_vpp(df_seg, lim_inf, lim_sup))
-
-        ## calculate peak to peak voltage of H-reflex
-        # lim_inf=0.025
-        # lim_sup=0.05
-        # vpp_hreflex_list.append(get_vpp(df_seg, lim_inf, lim_sup))
-       
-        # print(f"vpp mwave: {vpp_mwave}")
-        # vpp_mwave_list.append(vpp_mwave)
-
-        # vpp_hreflex = get_vpp_hreflex(df_seg)
-
-        # print(f"df_seg:\n{df_seg}")
-        ## time axis
-        # t = np.linspace(-0.02, 0.08, len(df_seg))
         ## plot emg segment at each subplot
         ax[i].plot(df_seg.iloc[:,ch_time], df_seg.iloc[:,ch_emg])
         ax[i].grid(color = 'green', linestyle = '--', linewidth = 0.2)
@@ -279,14 +228,8 @@ def signal_segmentation(name_title):
     # for obj in obj_list:
     #     obj.myfunc()
 
-
     ax_seg = ax
     fig_seg = fig
-
-    ## function to plot h-reflex max values
-    # ax_vpp = plot_vpp(vpp_mwave_list, vpp_hreflex_list, ax_vpp)
-    # fig_vpp.suptitle(f"{name_title}", fontsize=12)
-    
     
     fig_seg.canvas.mpl_connect('button_press_event', on_click)
 
@@ -308,9 +251,11 @@ def plot_vpp(mwave, hreflex, ax):
     return ax
 
 ##################################
-def get_vpp(df, lim_inf, lim_sup):
+def get_vpp(obj, lim_inf, lim_sup):
 
-    # for ch_emg in ch_emg_list:
+    df = obj.get_df()
+    # print(f"get df: {df}")
+
     ch_emg = ch_emg_list[0]
 
     df_emg = df[(df.iloc[:,ch_time]>=lim_inf) & (df.iloc[:,ch_time]<=lim_sup)]
@@ -322,170 +267,12 @@ def get_vpp(df, lim_inf, lim_sup):
     df_max = df_emg[df_emg.index==id_max]
     df_min = df_emg[df_emg.index==id_min]
 
-    vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
+    vmax = df_max.iloc[0,ch_emg]
+    vmin = df_min.iloc[0,ch_emg]
+    vpp  = vmax - vmin
     
-    # emg_grad = np.gradient(df_seg.iloc[:,ch_emg].to_numpy())
-    
-    # df_a = pd.DataFrame()
-    # df_a['time'] = df_seg.iloc[:,ch_time]
-    # df_a['emg'] = df_seg.iloc[:,ch_emg]
-    # df_a['grad'] = np.abs(emg_grad)
-    # # print(f"df_a:\n{df_a}\n")
+    return vpp, vmin, vmax
 
-
-    # df_max = df_a[df_a['grad']==df_a['grad'].max()]
-    # # print(f"df max:\n{df_max}\n")
-    
-    # t0 = df_max['time'].values[0]
-    # # print(f"t0 = {t0}")
-
-    # df_1 = df_a.loc[(df_a['time'] <= t0)]
-    # df_2 = df_a.loc[(df_a['time'] >= t0)]
-    # # print(f"df_1:\n{df_1}\n")
-    # # print(f"df_2:\n{df_2}\n")
-
-    # df_1_max = df_1.loc[ df_1['emg'].abs() == df_1['emg'].abs().max()]
-    # df_2_max = df_2.loc[ df_2['emg'].abs() == df_2['emg'].abs().max()]
-    # # print(f"df_1_max:\n{df_1_max}\n")
-    # # print(f"df_2_max:\n{df_2_max}\n")
-
-    # vpp = np.abs(df_2_max['emg'].values[0] - df_1_max['emg'].values[0])
-    # # print(f"vpp: {vpp}")
-
-    return vpp
-
-##################################
-def get_vpp_with_grad(df, lim_inf, lim_sup, ax_filt, ax_grad, ax_fft):
-
-    # for ch_emg in ch_emg_list:
-    ch_emg = ch_emg_list[0]
-
-    # df_emg = df[(df.iloc[:,ch_time]>=lim_inf) & (df.iloc[:,ch_time]<=lim_sup)]
-    # print(f"df_seg:\n{df_seg}")
-
-    # id_max = df_emg.iloc[:,ch_emg].idxmax()
-    # id_min = df_emg.iloc[:,ch_emg].idxmin()
-
-    # df_max = df_emg[df_emg.index==id_max]
-    # df_min = df_emg[df_emg.index==id_min]
-
-    # vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
-
-     ## emg signal filtering
-    emg_filtered = filter_emg(df.iloc[:,ch_emg].to_numpy())
-    emg_gradient = np.abs(np.gradient(emg_filtered))
-    
-    df_emg = pd.DataFrame()
-    df_emg['time'] = df.iloc[:,ch_time]
-    df_emg['emg']  = df.iloc[:,ch_emg]
-    df_emg['emg_filtered'] = emg_filtered
-    df_emg['emg_gradient'] = emg_gradient
-    # print(f"df_a:\n{df_a}\n")
-
-    ###################
-    ## plot filtered data
-    # ax_filt.plot(df_emg['time'], df_emg['emg_filtered'])
-    # ax_filt.grid(color = 'green', linestyle = '--', linewidth = 0.2)
-
-    ax_grad.plot(df_emg['time'], df_emg['emg_gradient'])
-    ax_grad.grid(color = 'green', linestyle = '--', linewidth = 0.2)
-    # ax.set_title(f"stim: {i}")
-    ###################
-
-    df_mwave = df_emg[(df_emg['time']>=lim_inf) & (df_emg['time']<=lim_sup)]
-
-    df_max = df_mwave[df_mwave['emg_gradient']==df_mwave['emg_gradient'].max()]
-    # print(f"df max:\n{df_max}\n")
-    
-    t0 = df_max['time'].values[0]
-    print(f"t max grad: {t0}")
-
-    ## get value of 'emg_filtered' at t0
-    value_ref = df_emg['emg_filtered'].loc[df_emg['time']==t0].values[0]
-    print(f"value ref filtered emg: {value_ref}")
-
-    ## subtract value_ref from 'emg_filtered'
-    df_emg['emg_filtered'] = df_emg['emg_filtered'].to_numpy() - value_ref
-
-    ## extract a section of 'emg_filtered' from (t0-0.005 s) >= t <= (t0+0.005 s)
-    emg_filtered_values = df_emg['emg_filtered'].loc[(df_emg['time']>=(t0-0.005)) & (df_emg['time']<=(t0+0.005))].values
-
-    ## get components in frequency, is the signals similar to a sin(x) with a freq. approx. 100 Hz ?
-    fft_signal(emg_filtered_values, ax_fft)
-
-    ###################
-    ## plot filtered data minus value_ref
-    ax_filt.plot(df_emg['time'], df_emg['emg_filtered'])
-    ax_filt.grid(color = 'green', linestyle = '--', linewidth = 0.2)
-
-    ######################
-    ## plot point max. filtered signal
-    ax_filt.plot(t0, df_emg['emg_filtered'].loc[df_emg['time']==t0], 'ro')
-    ax_grad.plot(t0, df_emg['emg_gradient'].loc[df_emg['time']==t0], 'ro')
-
-    ## vertical lines
-    ax_filt.axvline(x=lim_inf, linestyle="--", color='tab:orange')
-    ax_filt.axvline(x=lim_sup, linestyle="--", color='tab:orange')
-
-    ax_grad.axvline(x=lim_inf, linestyle="--", color='tab:orange')
-    ax_grad.axvline(x=lim_sup, linestyle="--", color='tab:orange')
-    #####################
-
-
-
-    # print(f"t0 = {t0}")
-
-    # df_max = df_emg[df_emg['emg_gradient']==df_mwave['emg_gradient'].max()]
-
-    ## look for the minimum values to the left and right of the gradient from the gradient's peak
-    tp = 0.0025 ## in seconds 
-    df_1 = df_emg[(df_emg['time'] >= (t0-tp)) & (df_emg['time'] < t0)]
-    df_2 = df_emg[(df_emg['time'] > t0)       & (df_emg['time'] <= (t0+tp))]
-    # print(f"df_1:\n{df_1}\n")
-    # print(f"df_2:\n{df_2}\n")
-
-    df_1_min = df_1[ (df_1['emg_gradient']) == (df_1['emg_gradient'].min())]
-    df_2_min = df_2[ (df_2['emg_gradient']) == (df_2['emg_gradient'].min())]
-    # print(f"df_1_max:\n{df_1_max}\n")
-    # print(f"df_2_max:\n{df_2_max}\n")
-
-    t_peak_1 = df_1_min['time'].values[0]
-    t_peak_2 = df_2_min['time'].values[0]
-
-    vp_1 = df_emg[(df_emg['time']==t_peak_1)]['emg_filtered'].values[0]
-    vp_2 = df_emg[(df_emg['time']==t_peak_2)]['emg_filtered'].values[0]
-
-    vpp = np.abs(vp_1 - vp_2)
-
-    # vpp = np.abs(df_emg['emg_filtered'].values[0] - df_1_max['emg'].values[0])
-
-    # vpp = np.abs(df_2_max['emg'].values[0] - df_1_max['emg'].values[0])
-    # print(f"vpp: {vpp}")
-
-    return vpp
-
-#############################
-## fft
-def fft_signal(x, ax):
-
-    X = fft(x)
-    N = len(X)
-    n = np.arange(N)
-    # get the sampling rate
-    sr = samplingRate
-    T = N/sr
-    freq = n/T 
-
-    # Get the one-sided specturm
-    n_oneside = N//2
-    # get the one side frequency
-    f_oneside = freq[:n_oneside]
-
-    ax.plot(f_oneside, np.abs(X[:n_oneside]), 'b')
-    # ax.set_xlabel('Freq (Hz)')
-    # ax.set_ylabel('FFT Amplitude |X(freq)|')
-
-    return 0
 
 ###################
 def on_click(event):
@@ -500,11 +287,11 @@ def on_click(event):
         ## is the mouse over any subplot?
         if event.inaxes in ax_copy:
             ## which subplot?
-            ax_index = np.argwhere(event.inaxes == ax_copy)[0]
+            ax_index = np.argwhere(event.inaxes == ax_copy)[0][0]
             ## subplot index
             print(f"selected ax: {ax_index}")
             ## open a new window with the signals of the selected subplot
-            signal_measurements(ax_index[0])
+            signal_measurements(ax_index)
         else:
             pass
             # print(f"event.inaxes out of ax")
@@ -584,6 +371,7 @@ def onselect(vmin, vmax):
 
 #########################
 def on_press(event):
+    global ax_seg, fig_seg, tmin, tmax
     # print('press', event.key)
     sys.stdout.flush()
 
@@ -608,23 +396,27 @@ def on_press(event):
         ax[ax_sel].grid(color = 'green', linestyle = '--', linewidth = 0.2)
         ax[ax_sel].set_title(f"stim: {ax_index}")
 
-
-        df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
+        ###################
+        ## peak to peak value between x1 >= t <= x2
+        vpp, vmin, vmax = get_vpp(obj_list[ax_index], tmin, tmax)
+        # df_emg = df_emg[(df_emg.iloc[:,ch_time]>=x1) & (df_emg.iloc[:,ch_time]<=x2)]
         
-        id_max = df_emg.iloc[:,ch_emg].idxmax()
-        id_min = df_emg.iloc[:,ch_emg].idxmin()
+        # id_max = df_emg.iloc[:,ch_emg].idxmax()
+        # id_min = df_emg.iloc[:,ch_emg].idxmin()
 
-        df_max = df_emg[df_emg.index==id_max]
-        df_min = df_emg[df_emg.index==id_min]
+        # df_max = df_emg[df_emg.index==id_max]
+        # df_min = df_emg[df_emg.index==id_min]
 
-        vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
+        # vpp = df_max.iloc[0,ch_emg] - df_min.iloc[0,ch_emg]
         print(f"Vpp: {vpp:3.2f} uV")
+        ## peak to peak value between x1 >= t <= x2
 
-        ax[ax_sel].axhline(y=df_max.iloc[0,ch_emg], linestyle="--", color='tab:purple')
-        ax[ax_sel].axhline(y=df_min.iloc[0,ch_emg], linestyle="--", color='tab:purple')
+        ax[ax_sel].axhline(y=vmin, linestyle="--", color='tab:purple')
+        ax[ax_sel].axhline(y=vmax, linestyle="--", color='tab:purple')
 
+        ####################
         x_a = x2 + 0.01
-        y_a = df_min.iloc[0,ch_emg] + (vpp)/3
+        y_a = vmin + (vpp)/3
 
         bbox = dict(boxstyle="round", fc="0.8")
         ax[ax_sel].annotate(f"Vpp={vpp:3.1f} uV", xy=(x_a, y_a), xytext=(x_a, y_a),fontsize=16, bbox=bbox,)
@@ -725,8 +517,34 @@ def on_press(event):
 
         fig.canvas.draw()
 
+    elif event.key == 'm':
+        for i, obj in enumerate(obj_list):
+            vpp, vmin, vmax = get_vpp(obj, tmin, tmax)
+            updating_plot(obj,vmin,vmax,ax_seg[i])
+            print(f"vpp: {vpp}")
+
+        fig_seg.canvas.draw()
+
     else:
         pass
+
+    return 0
+
+def updating_plot(obj,vmin,vmax,ax):
+
+    ax.cla()
+    df_seg = obj.get_df()
+    ch_emg = ch_emg_list[0]
+
+    ax.plot(df_seg.iloc[:,ch_time], df_seg.iloc[:,ch_emg])
+
+    ax.axhline(y=vmin, linestyle="--", color='tab:purple')
+    ax.axhline(y=vmax, linestyle="--", color='tab:purple')
+
+    ax.grid(color = 'green', linestyle = '--', linewidth = 0.2)
+
+    # ax.set_title(f"stim: {i}")
+    # fig.suptitle(f"{name_title}\n{channelsNames[ch_emg]}", fontsize=16)
 
     return 0
 
