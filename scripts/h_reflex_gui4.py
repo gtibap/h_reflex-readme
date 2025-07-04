@@ -58,7 +58,11 @@ def browseFiles():
 
 ######################
 def closeWindows():
+    global obj_list
+
     plt.close('all')
+    obj_list = []
+    
     return 0
 
 ####################
@@ -518,12 +522,23 @@ def on_press(event):
         fig.canvas.draw()
 
     elif event.key == 'm':
+        print(f"\npeak to peak voltages:\n")
+        
+        vpp_list=[]
         for i, obj in enumerate(obj_list):
             vpp, vmin, vmax = get_vpp(obj, tmin, tmax)
             updating_plot(obj,vmin,vmax,ax_seg[i])
-            print(f"vpp: {vpp}")
+            print(f"{vpp}")
+            vpp_list.append(vpp)
+        
+        print(f"\n")
+
+        fig_local, ax_local = plt.subplots(1,1)
+        ax_local.plot(vpp_list)
+        plt.show()
 
         fig_seg.canvas.draw()
+
 
     else:
         pass
